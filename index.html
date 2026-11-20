@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Magnetfeld-Simulator (Biot–Savart)</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#050a12;color:#dbe8f5;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;overflow:hidden}
+  #wrap{display:flex;height:100vh}
+  #view{flex:1;position:relative;min-width:0}
+  #field{display:block;width:100%;height:100%;cursor:crosshair}
+  #topbar{position:absolute;top:12px;left:14px;display:flex;gap:10px;align-items:center;pointer-events:none}
+  .logo{font:700 14px/1 ui-monospace,Menlo,monospace;letter-spacing:.2em;color:#3ee0ff}
+  .logo span{color:#ff8a3d}
+  .chip{background:rgba(10,20,34,.85);border:1px solid #1d3550;border-radius:8px;padding:5px 9px;font:12px ui-monospace,Menlo,monospace;color:#9fc6e8}
+  #probe{position:absolute;bottom:12px;left:14px;background:rgba(10,20,34,.88);border:1px solid #1d3550;border-radius:8px;padding:8px 11px;font:12px/1.5 ui-monospace,Menlo,monospace;color:#bfe3ff;min-width:230px}
+  #planeInfo{position:absolute;top:44px;left:14px;font-size:12px;color:#7f9bb8}
+  #panel{width:340px;background:#0a1422;border-left:1px solid #17304a;overflow-y:auto;padding:14px 16px 18px}
+  .sec{font:600 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.25em;color:#5d7f9f;margin:16px 0 8px;text-transform:uppercase;border-bottom:1px solid #15283d;padding-bottom:6px}
+  .sec:first-child{margin-top:0}
+  select{width:100%;background:#0f1d30;color:#dbe8f5;border:1px solid #23415f;border-radius:6px;padding:7px;font-size:13px}
+  .ctrl{margin:9px 0}
+  .ctrl-row{display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px}
+  .val{font:12px ui-monospace,Menlo,monospace;color:#3ee0ff}
+  input[type=range]{width:100%;accent-color:#3ee0ff}
+  .toggles{display:flex;flex-wrap:wrap;gap:6px}
+  .tg{flex:1 1 30%;background:#0f1d30;border:1px solid #23415f;color:#8fb0cf;border-radius:6px;padding:6px 4px;font-size:12px;cursor:pointer}
+  .tg.on{background:#123352;color:#dff6ff;border-color:#3ee0ff}
+  #plot{width:100%;height:170px;background:#07101c;border:1px solid #17304a;border-radius:6px;display:block}
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px}
+  .card{background:#0d1a2b;border:1px solid #1a3149;border-radius:6px;padding:7px 8px}
+  .card .l{font:10px ui-monospace,Menlo,monospace;color:#6f8fae;letter-spacing:.05em}
+  .card .v{font:600 14px ui-monospace,Menlo,monospace;color:#e9f6ff;margin-top:3px}
+  .card .v.good{color:#39ff8a}.card .v.warn{color:#ffb347}
+  details{margin-top:12px;font-size:12px;line-height:1.5;color:#9fb3c8}
+  summary{cursor:pointer;color:#cfe8ff;font-weight:600}
+  details p{margin:6px 0}
+  .ai{color:#6f8499;font-style:italic}
+  .legend{font-size:11px;color:#7f9bb8;margin-top:6px;line-height:1.5}
+  body{background:#0a0a0a;color:#e6e6e6}
+  .logo{color:#fff}.logo span{color:#8c8c8c}
+  .chip,#probe{background:rgba(14,14,14,.9);border-color:#2c2c2c;color:#d0d0d0}
+  #planeInfo{color:#8c8c8c}
+  #panel{background:#111;border-left:1px solid #262626}
+  .sec{color:#8c8c8c;border-bottom-color:#262626}
+  select{background:#111;color:#e6e6e6;border:1px solid #3a3a3a}
+  .val{color:#fff}
+  .tg{background:transparent;border:1px solid #333;color:#7a7a7a}
+  .tg.on{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.7);color:#fff}
+  .tg:hover{border-color:#777}
+  #plot{background:#0c0c0c;border-color:#262626}
+  .card{background:#151515;border-color:#262626}
+  .card .l{color:#8c8c8c}.card .v{color:#fff}
+  summary{color:#fff} details{color:#a8a8a8}
+  .legend{color:#8c8c8c}
+  /* --- schlichtes Bedienfeld: Schwarz/Weiß --- */
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:2px;background:#4a4a4a;border-radius:1px;outline:none;cursor:pointer;accent-color:#fff}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:#fff;border:none;box-shadow:none;cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#fff;border:none;cursor:pointer}
+  input[type=range]::-moz-range-track{height:2px;background:#4a4a4a}
+  input[type=range]:focus-visible::-webkit-slider-thumb{outline:2px solid #fff;outline-offset:2px}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="view">
+    <canvas id="field"></canvas>
+    <div id="topbar"><div class="logo">B-<span>FIELD</span></div><div class="chip" id="chipB">|B| Mitte = –</div></div>
+    <div id="planeInfo"></div>
+    <div id="probe">Maus über das Feld bewegen</div>
+  </div>
+  <div id="panel">
+    <div class="sec">Konfiguration</div>
+    <select id="config">
+      <option value="wire">Gerader Leiter</option>
+      <option value="wires2">Zwei parallele Leiter (gleichsinnig)</option>
+      <option value="wires2anti">Zwei parallele Leiter (gegensinnig)</option>
+      <option value="loop">Kreisstrom / magnetischer Dipol</option>
+      <option value="helmholtz" selected>Helmholtz-Spulenpaar</option>
+      <option value="antihelmholtz">Anti-Helmholtz (Gradientenfeld)</option>
+      <option value="solenoid">Zylinderspule (Solenoid)</option>
+    </select>
+
+    <div class="sec">Parameter</div>
+    <div class="ctrl"><div class="ctrl-row">Strom I <span class="val" id="vI"></span></div><input id="I" type="range" min="0.1" max="5" step="0.1" value="1"></div>
+    <div class="ctrl" id="cN"><div class="ctrl-row">Windungen N (pro Spule) <span class="val" id="vN"></span></div><input id="N" type="range" min="1" max="500" step="1" value="100"></div>
+    <div class="ctrl" id="cR"><div class="ctrl-row">Spulenradius R <span class="val" id="vR"></span></div><input id="R" type="range" min="2" max="30" step="0.5" value="10"></div>
+    <div class="ctrl" id="cD"><div class="ctrl-row">Abstand d <span class="val" id="vD"></span></div><input id="D" type="range" min="0.2" max="3" step="0.05" value="1"></div>
+    <div class="ctrl" id="cL"><div class="ctrl-row">Länge L <span class="val" id="vL"></span></div><input id="L" type="range" min="0.5" max="6" step="0.1" value="3"></div>
+
+    <div class="sec">Darstellung</div>
+    <div class="toggles">
+      <button class="tg on" id="tHeat">|B| Farbkarte</button>
+      <button class="tg on" id="tLines">Feldlinien</button>
+      <button class="tg" id="tVec">Vektoren</button>
+    </div>
+    <div class="legend">Farbe: log<sub>10</sub>|B|, dunkel = schwach, hell = stark. ⊙ Strom aus der Ebene, ⊗ Strom in die Ebene.</div>
+
+    <div class="sec" id="plotTitle">Feld auf der Achse</div>
+    <canvas id="plot"></canvas>
+    <div class="legend">Linie: numerisch (elliptische Integrale bzw. Superposition) · Punkte: analytische Formel</div>
+    <div class="cards" id="cards"></div>
+
+    <details>
+      <summary>Modell &amp; Physik</summary>
+      <p><b>Biot–Savart:</b> d<b>B</b> = (μ<sub>0</sub> I / 4π) · d<b>l</b> × <b>r̂</b> / r². Alle Konfigurationen sind Überlagerungen von zwei Grundbausteinen.</p>
+      <p><b>Unendlich langer Leiter:</b> B = μ<sub>0</sub>I / (2πr), Feldlinien sind konzentrische Kreise (Ebene senkrecht zum Leiter).</p>
+      <p><b>Kreisstrom:</b> Das Biot–Savart-Integral über den Ring lässt sich in geschlossener Form mit den vollständigen elliptischen Integralen K(m) und E(m) ausdrücken (Berechnung über das arithmetisch-geometrische Mittel). Dargestellt ist eine Ebene, die die Symmetrieachse enthält.</p>
+      <p><b>Kontrolle:</b> Auf der Achse gilt exakt B<sub>z</sub> = μ<sub>0</sub>NIR² / (2(R²+z²)<sup>3/2</sup>). Die Abweichung zwischen allgemeiner Rechnung und dieser Formel wird unten angezeigt.</p>
+      <p><b>Helmholtz:</b> Bei d = R verschwindet die zweite Ableitung von B<sub>z</sub> in der Mitte, das Feld ist dort besonders homogen: B = (4/5)<sup>3/2</sup> μ<sub>0</sub>NI/R.</p>
+      <p><b>Feldlinien</b> werden mit einem Runge-Kutta-Verfahren 4. Ordnung entlang <b>B</b>/|B| integriert. Bei Spulen werden die Startpunkte nach gleichem magnetischen Fluss verteilt, damit die Liniendichte grob der Feldstärke entspricht.</p>
+      <p><b>Vereinfachungen:</b> dünne Leiter, Windungen einer Spule an einem Ort gebündelt, statische Ströme, Vakuum.</p>
+      <p class="ai">Entwickelt mit KI-Unterstützung (Claude). Physik und Ergebnisse geprüft von Lukas Schreyögg.</p>
+    </details>
+  </div>
+</div>
+
+<script>
+'use strict';
+const MU0 = 4e-7 * Math.PI;
+
+
+
+
+function ellipKE(m) {
+ 
+  let a = 1, b = Math.sqrt(1 - m), c2sum = m / 2, pow = 0.5;
+  for (let i = 0; i < 30; i++) {
+    const an = (a + b) / 2, bn = Math.sqrt(a * b), cn = (a - b) / 2;
+    pow *= 2; c2sum += pow * cn * cn;
+    a = an; b = bn;
+    if (Math.abs(cn) < 1e-15) break;
+  }
+  const K = Math.PI / (2 * a);
+  return [K, K * (1 - c2sum)];
+}
+
+
+
+
+
+function loopField(a, I, z0, rho, z) {
+  const dz = z - z0;
+  const r2 = rho * rho + dz * dz;
+  const alpha2 = a * a + r2 - 2 * a * rho;
+  const beta2 = a * a + r2 + 2 * a * rho;
+  const beta = Math.sqrt(beta2);
+  if (alpha2 < 1e-12 * a * a) return [0, 0]; 
+  const m = 1 - alpha2 / beta2;
+  const [K, E] = ellipKE(m);
+  const C = MU0 * I / Math.PI;
+  const Bz = C / (2 * alpha2 * beta) * ((a * a - r2) * E + alpha2 * K);
+  const Brho = rho < 1e-9 * a ? 0 : C * dz / (2 * alpha2 * beta * rho) * ((a * a + r2) * E - alpha2 * K);
+  return [Brho, Bz];
+}
+
+
+
+
+
+
+const S = { config: 'helmholtz', I: 1, N: 100, R: 0.10, D: 1, L: 3, heat: true, lines: true, vec: false };
+let sources = { loops: [], wires: [] }; 
+let world = { x0: -0.3, x1: 0.3, y0: -0.2, y1: 0.2 }; 
+
+function buildSources() {
+  const R = S.R, I = S.I, N = S.N, c = S.config;
+  sources = { loops: [], wires: [] };
+  if (c === 'wire') sources.wires.push({ x: 0, y: 0, I: I });
+  if (c === 'wires2') { sources.wires.push({ x: -R / 2, y: 0, I: I }, { x: R / 2, y: 0, I: I }); }
+  if (c === 'wires2anti') { sources.wires.push({ x: -R / 2, y: 0, I: I }, { x: R / 2, y: 0, I: -I }); }
+  if (c === 'loop') sources.loops.push({ a: R, I: N * I, z: 0 });
+  if (c === 'helmholtz' || c === 'antihelmholtz') {
+    const d = S.D * R, s = c === 'antihelmholtz' ? -1 : 1;
+    sources.loops.push({ a: R, I: N * I, z: -d / 2 }, { a: R, I: s * N * I, z: d / 2 });
+  }
+  if (c === 'solenoid') {
+    const Ltot = S.L * R, nl = 40;
+    for (let k = 0; k < nl; k++) sources.loops.push({ a: R, I: N * I / nl, z: -Ltot / 2 + Ltot * (k + 0.5) / nl });
+  }
+  
+  let half = 3 * R;
+  if (c === 'solenoid') half = Math.max(3 * R, 0.85 * S.L * R + R);
+  if (c === 'helmholtz' || c === 'antihelmholtz') half = Math.max(3 * R, S.D * R / 2 + 2 * R);
+  const asp = canvas.height / canvas.width;
+  world = { x0: -half, x1: half, y0: -half * asp, y1: half * asp };
+}
+
+
+
+
+
+function field(X, Y) {
+  let bx = 0, by = 0;
+  for (const w of sources.wires) {
+    const dx = X - w.x, dy = Y - w.y, r2 = dx * dx + dy * dy;
+    if (r2 < 1e-14) continue;
+    const f = MU0 * w.I / (2 * Math.PI * r2);
+    bx += -f * dy; by += f * dx; 
+  }
+  if (sources.loops.length) {
+    const rho = Math.abs(Y), sgn = Y < 0 ? -1 : 1;
+    for (const L of sources.loops) {
+      const [br, bz] = loopField(L.a, L.I, L.z, rho, X);
+      bx += bz; by += sgn * br;
+    }
+  }
+  return [bx, by];
+}
+
+
+
+
+
+
+const canvas = document.getElementById('field');
+const ctx = canvas.getContext('2d');
+const DPR = Math.min(window.devicePixelRatio || 1, 2);
+function resize() {
+  const r = canvas.getBoundingClientRect();
+  canvas.width = Math.round(r.width * DPR); canvas.height = Math.round(r.height * DPR);
+}
+const toPx = (X, Y) => [(X - world.x0) / (world.x1 - world.x0) * canvas.width, (world.y1 - Y) / (world.y1 - world.y0) * canvas.height];
+const toW = (px, py) => [world.x0 + px / canvas.width * (world.x1 - world.x0), world.y1 - py / canvas.height * (world.y1 - world.y0)];
+
+function colormap(t) { 
+  const stops = [[5, 10, 25], [16, 42, 92], [20, 110, 160], [40, 190, 200], [170, 235, 160], [255, 240, 140]];
+  t = Math.min(Math.max(t, 0), 1) * (stops.length - 1);
+  const i = Math.min(Math.floor(t), stops.length - 2), f = t - i, a = stops[i], b = stops[i + 1];
+  return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
+}
+
+function drawHeat() {
+  const gw = 220, gh = Math.round(gw * canvas.height / canvas.width);
+  const vals = new Float32Array(gw * gh);
+  let vmax = -Infinity;
+  for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) {
+    const [X, Y] = toW((i + 0.5) / gw * canvas.width, (j + 0.5) / gh * canvas.height);
+    const [bx, by] = field(X, Y);
+    const v = Math.log10(Math.hypot(bx, by) + 1e-12);
+    vals[j * gw + i] = v;
+  }
+  
+  const ref = Math.log10(refB() + 1e-12);
+  const lo = ref - 2.0, hi = ref + 0.8;
+  const img = ctx.createImageData(gw, gh);
+  for (let k = 0; k < gw * gh; k++) {
+    const c = colormap((vals[k] - lo) / (hi - lo));
+    img.data[4 * k] = c[0]; img.data[4 * k + 1] = c[1]; img.data[4 * k + 2] = c[2]; img.data[4 * k + 3] = 255;
+  }
+  const off = document.createElement('canvas'); off.width = gw; off.height = gh;
+  off.getContext('2d').putImageData(img, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(off, 0, 0, canvas.width, canvas.height);
+}
+
+function refB() {
+  if (sources.loops.length) { const b = field(0, 0); const h = Math.hypot(b[0], b[1]); if (h > 0) return h; return Math.hypot(...field(0, S.R * 0.5)); }
+  return Math.hypot(...field(sources.wires[0].x, sources.wires[0].y + S.R));
+}
+
+
+
+
+function nearConductor(X, Y, eps) {
+  for (const w of sources.wires) if (Math.hypot(X - w.x, Y - w.y) < eps) return true;
+  for (const L of sources.loops) if (Math.hypot(X - L.z, Math.abs(Y) - L.a) < eps) return true;
+  return false;
+}
+function dir(X, Y) { const [bx, by] = field(X, Y); const n = Math.hypot(bx, by); return n > 0 ? [bx / n, by / n] : [0, 0]; }
+function trace(X, Y, sign, h, maxSteps) {
+  const pts = [[X, Y]]; const sx = X, sy = Y; const eps = S.R * 0.025;
+  for (let s = 0; s < maxSteps; s++) {
+    const k1 = dir(X, Y), k2 = dir(X + sign * h / 2 * k1[0], Y + sign * h / 2 * k1[1]);
+    const k3 = dir(X + sign * h / 2 * k2[0], Y + sign * h / 2 * k2[1]), k4 = dir(X + sign * h * k3[0], Y + sign * h * k3[1]);
+    X += sign * h / 6 * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]);
+    Y += sign * h / 6 * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1]);
+    pts.push([X, Y]);
+    const m = (world.x1 - world.x0) * 0.08;
+    if (X < world.x0 - m || X > world.x1 + m || Y < world.y0 - m || Y > world.y1 + m) break;
+    if (nearConductor(X, Y, eps)) break;
+    if (s > 20 && Math.hypot(X - sx, Y - sy) < h * 0.8) { pts.push([sx, sy]); return { pts, closed: true }; }
+  }
+  return { pts, closed: false };
+}
+
+function seeds() {
+  const R = S.R, c = S.config, out = [];
+  if (sources.wires.length) {
+    for (const w of sources.wires) {
+      
+      for (let k = 0; k < 9; k++) out.push([w.x + (w.x <= 0 ? -1 : 1) * 0.06 * R * Math.pow(1.55, k), w.y]);
+    }
+    if (c === 'wires2') for (let k = 1; k <= 4; k++) out.push([0, k * 0.35 * R]);
+    return out;
+  }
+
+  const planes = c === 'antihelmholtz' ? sources.loops.map(l => l.z) : [0];
+  const nLines = c === 'solenoid' ? 9 : 8;
+  for (const zs of planes) {
+    const M = 400, rmax = R * 0.985, rs = [], phi = [0];
+    for (let i = 1; i <= M; i++) {
+      const r0 = rmax * (i - 1) / M, r1 = rmax * i / M, rm = (r0 + r1) / 2;
+      const bz = field(zs, rm)[0];
+      phi.push(phi[i - 1] + Math.abs(bz) * 2 * Math.PI * rm * (r1 - r0)); rs.push(r1);
+    }
+    for (let k = 1; k <= nLines; k++) {
+      const target = phi[M] * (k - 0.5) / nLines;
+      let i = 1; while (i < M && phi[i] < target) i++;
+      const r = rs[i - 1];
+      out.push([zs + 1e-9, r], [zs + 1e-9, -r]);
+    }
+    if (c === 'antihelmholtz') out.push([zs * 0.999, 1e-6]);
+  }
+  return out;
+}
+
+function drawLines() {
+  const h = (world.x1 - world.x0) / 500;
+  ctx.lineWidth = 1.4 * DPR;
+  for (const s of seeds()) {
+    const f = trace(s[0], s[1], 1, h, 3000);
+    let all = f.pts;
+    if (!f.closed) { const b = trace(s[0], s[1], -1, h, 3000); all = b.pts.reverse().concat(f.pts.slice(1)); }
+    ctx.strokeStyle = 'rgba(235,250,255,0.85)';
+    ctx.beginPath();
+    all.forEach((p, i) => { const [px, py] = toPx(p[0], p[1]); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
+    ctx.stroke();
+    
+    
+    const step = 70;
+    for (let i = step / 2; i < all.length - 2; i += step) {
+      const [x1, y1] = toPx(all[i][0], all[i][1]), [x2, y2] = toPx(all[i + 1][0], all[i + 1][1]);
+      const ang = Math.atan2(y2 - y1, x2 - x1), L = 7 * DPR;
+      ctx.fillStyle = 'rgba(255,170,90,0.95)';
+      ctx.beginPath(); ctx.moveTo(x1 + L * Math.cos(ang), y1 + L * Math.sin(ang));
+      ctx.lineTo(x1 + L * Math.cos(ang + 2.5), y1 + L * Math.sin(ang + 2.5));
+      ctx.lineTo(x1 + L * Math.cos(ang - 2.5), y1 + L * Math.sin(ang - 2.5)); ctx.fill();
+    }
+  }
+}
+
+function drawVectors() {
+  const n = 26, m = Math.round(n * canvas.height / canvas.width);
+  ctx.strokeStyle = 'rgba(255,180,90,0.8)'; ctx.lineWidth = 1.2 * DPR;
+  const cell = canvas.width / n;
+  for (let j = 0; j < m; j++) for (let i = 0; i < n; i++) {
+    const px = (i + 0.5) * cell, py = (j + 0.5) * canvas.height / m;
+    const [X, Y] = toW(px, py); if (nearConductor(X, Y, S.R * 0.08)) continue;
+    const [bx, by] = field(X, Y), b = Math.hypot(bx, by); if (!b) continue;
+    const len = cell * 0.42, ux = bx / b, uy = -by / b;
+    ctx.beginPath(); ctx.moveTo(px - ux * len, py - uy * len); ctx.lineTo(px + ux * len, py + uy * len); ctx.stroke();
+    ctx.beginPath(); ctx.arc(px + ux * len, py + uy * len, 1.6 * DPR, 0, 7); ctx.fillStyle = 'rgba(255,180,90,0.9)'; ctx.fill();
+  }
+}
+
+function drawConductors() {
+  const r = 7 * DPR;
+  const mark = (X, Y, out) => {
+    const [px, py] = toPx(X, Y);
+    ctx.fillStyle = '#ff8a3d'; ctx.beginPath(); ctx.arc(px, py, r, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#1a0b02'; ctx.fillStyle = '#1a0b02'; ctx.lineWidth = 1.6 * DPR;
+    if (out) { ctx.beginPath(); ctx.arc(px, py, r * 0.3, 0, 7); ctx.fill(); }
+    else { const q = r * 0.55; ctx.beginPath(); ctx.moveTo(px - q, py - q); ctx.lineTo(px + q, py + q); ctx.moveTo(px + q, py - q); ctx.lineTo(px - q, py + q); ctx.stroke(); }
+  };
+  for (const w of sources.wires) mark(w.x, w.y, w.I > 0);
+  if (S.config === 'solenoid') {
+    sources.loops.forEach((L, k) => { if (k % 3 === 1) { mark(L.z, L.a, L.I > 0); mark(L.z, -L.a, L.I < 0); } });
+  } else {
+    
+    
+    for (const L of sources.loops) { mark(L.z, L.a, L.I > 0); mark(L.z, -L.a, L.I < 0); }
+  }
+
+  if (sources.loops.length) {
+    ctx.setLineDash([6 * DPR, 6 * DPR]); ctx.strokeStyle = 'rgba(150,180,210,0.35)'; ctx.lineWidth = DPR;
+    const [, py] = toPx(0, 0); ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(canvas.width, py); ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  const [p0x] = toPx(0, 0), [p1x] = toPx(S.R, 0);
+  const sx = canvas.width - (p1x - p0x) - 20 * DPR, sy = canvas.height - 22 * DPR;
+  ctx.strokeStyle = '#cfe8ff'; ctx.lineWidth = 2 * DPR; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + (p1x - p0x), sy); ctx.stroke();
+  ctx.fillStyle = '#cfe8ff'; ctx.font = `${11 * DPR}px ui-monospace,monospace`; ctx.fillText((S.R * 100).toFixed(1) + ' cm', sx, sy - 6 * DPR);
+}
+
+function render() {
+  buildSources();
+  ctx.fillStyle = '#050a12'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (S.heat) drawHeat();
+  if (S.vec) drawVectors();
+  if (S.lines) drawLines();
+  drawConductors();
+  document.getElementById('planeInfo').textContent = sources.wires.length
+    ? 'Ebene senkrecht zu den Leitern' : 'Schnitt durch die Symmetrieachse (Achse horizontal)';
+  document.getElementById('chipB').textContent = sources.loops.length
+    ? '|B| Mitte = ' + fmtB(Math.hypot(...field(0, 0)))
+    : '|B| bei r = R: ' + fmtB(refB());
+  drawPlot();
+}
+
+const fmtB = b => b >= 1e-3 ? (b * 1e3).toFixed(3) + ' mT' : (b * 1e6).toFixed(2) + ' µT';
+
+
+
+function analyticAxis(z) { 
+  let b = 0; for (const L of sources.loops) b += MU0 * L.I * L.a * L.a / (2 * Math.pow(L.a * L.a + (z - L.z) ** 2, 1.5)); return b;
+}
+function analyticWires(x) { 
+  let b = 0; for (const w of sources.wires) { const d = x - w.x; if (Math.abs(d) > 1e-12) b += MU0 * w.I / (2 * Math.PI * d); } return b;
+}
+function drawPlot() {
+  const pc = document.getElementById('plot'), r = pc.getBoundingClientRect();
+  pc.width = r.width * DPR; pc.height = r.height * DPR;
+  const g = pc.getContext('2d'); g.fillStyle = '#0c0c0c'; g.fillRect(0, 0, pc.width, pc.height);
+  const loopsMode = sources.loops.length > 0;
+  document.getElementById('plotTitle').textContent = loopsMode ? 'B_z auf der Achse' : 'B_y entlang der Verbindungslinie';
+  const n = 300, xs = [], num = [], ana = [];
+  let maxDev = 0, ymax = 0;
+  for (let i = 0; i < n; i++) {
+    const x = world.x0 + (world.x1 - world.x0) * i / (n - 1);
+    let v, a;
+    if (loopsMode) { v = field(x, 0)[0]; a = analyticAxis(x); }
+    else { if (nearConductor(x, 0, S.R * 0.15)) { xs.push(x); num.push(NaN); ana.push(NaN); continue; } v = field(x, 0)[1]; a = analyticWires(x); }
+    xs.push(x); num.push(v); ana.push(a);
+    ymax = Math.max(ymax, Math.abs(v));
+    if (Math.abs(a) > 1e-3 * ymax) maxDev = Math.max(maxDev, Math.abs(v - a) / Math.abs(a));
+  }
+  const pad = 26 * DPR, W = pc.width - pad - 8 * DPR, H = pc.height - 2 * 12 * DPR;
+  const ymin = loopsMode && S.config !== 'antihelmholtz' ? 0 : -ymax;
+  const X = i => pad + W * i / (n - 1), Y = v => 12 * DPR + H * (1 - (v - ymin) / (ymax - ymin || 1));
+  g.strokeStyle = '#333'; g.lineWidth = DPR; g.beginPath(); g.moveTo(pad, Y(0)); g.lineTo(pad + W, Y(0)); g.stroke();
+  g.strokeStyle = '#3ee0ff'; g.lineWidth = 2 * DPR; g.beginPath(); let started = false;
+  num.forEach((v, i) => { if (isNaN(v)) { started = false; return; } started ? g.lineTo(X(i), Y(v)) : g.moveTo(X(i), Y(v)); started = true; }); g.stroke();
+  g.fillStyle = '#ff8a3d'; ana.forEach((v, i) => { if (i % 12 === 0 && !isNaN(v)) { g.beginPath(); g.arc(X(i), Y(v), 2.4 * DPR, 0, 7); g.fill(); } });
+  g.fillStyle = '#8c8c8c'; g.font = `${10 * DPR}px ui-monospace,monospace`;
+  g.fillText(fmtB(ymax), 2 * DPR, 12 * DPR); g.fillText((world.x0 * 100).toFixed(0) + ' cm', pad, pc.height - 2 * DPR);
+  g.fillText((world.x1 * 100).toFixed(0) + ' cm', pc.width - 40 * DPR, pc.height - 2 * DPR);
+  updateCards(maxDev);
+}
+
+function updateCards(maxDev) {
+  const R = S.R, c = S.config, cards = [];
+  cards.push(['Max. Abweichung num./analyt.', (maxDev * 100).toExponential(1) + ' %', maxDev < 1e-6 ? 'good' : 'warn']);
+  if (c === 'helmholtz') {
+    const b0 = field(0, 0)[0], th = Math.pow(0.8, 1.5) * MU0 * S.N * S.I / R;
+    const bq = field(R / 4, 0)[0];
+    cards.push(['B(0) Formel (4/5)^1.5 μ0NI/R', fmtB(th), S.D === 1 ? 'good' : '']);
+    cards.push(['B(0) berechnet', fmtB(b0), '']);
+    cards.push(['Homogenität ΔB/B bei z = R/4', ((bq - b0) / b0 * 100).toFixed(3) + ' %', Math.abs(bq - b0) / b0 < 1e-2 ? 'good' : 'warn']);
+  } else if (c === 'antihelmholtz') {
+    const dz = R * 1e-3, grad = (field(dz, 0)[0] - field(-dz, 0)[0]) / (2 * dz);
+    cards.push(['Gradient dB_z/dz in der Mitte', (grad * 1e3 / 100).toFixed(3) + ' mT/cm', '']);
+    cards.push(['B in der Mitte', fmtB(Math.abs(field(0, 0)[0])), 'good']);
+  } else if (c === 'solenoid') {
+    const Ltot = S.L * R, bInf = MU0 * S.N * S.I / Ltot, b0 = field(0, 0)[0];
+    cards.push(['Lange Spule μ0NI/L', fmtB(bInf), '']);
+    cards.push(['B(0) berechnet', fmtB(b0), '']);
+    cards.push(['Verhältnis B(0)/(μ0NI/L)', (b0 / bInf).toFixed(4) + '  (L/√(L²+4R²) = ' + (Ltot / Math.sqrt(Ltot * Ltot + 4 * R * R)).toFixed(4) + ')', '']);
+  } else if (c === 'loop') {
+    const b0 = field(0, 0)[0];
+    cards.push(['B(0) Formel μ0NI/(2R)', fmtB(MU0 * S.N * S.I / (2 * R)), '']);
+    cards.push(['B(0) berechnet', fmtB(b0), '']);
+    cards.push(['Dipolmoment m = NIπR²', (S.N * S.I * Math.PI * R * R).toFixed(4) + ' A·m²', '']);
+  } else {
+    cards.push(['B bei r = R (ein Leiter)', fmtB(MU0 * S.I / (2 * Math.PI * R)), '']);
+    if (c !== 'wire') cards.push(['B in der Mitte', fmtB(Math.hypot(...field(0, 0))), c === 'wires2' ? 'good' : '']);
+  }
+  document.getElementById('cards').innerHTML = cards.map(([l, v, cl]) => `<div class="card"><div class="l">${l}</div><div class="v ${cl}">${v}</div></div>`).join('');
+}
+
+
+function syncUI() {
+  const loops = !['wire', 'wires2', 'wires2anti'].includes(S.config);
+  document.getElementById('cN').style.display = loops ? '' : 'none';
+  document.getElementById('cD').style.display = ['helmholtz', 'antihelmholtz'].includes(S.config) ? '' : 'none';
+  document.getElementById('cL').style.display = S.config === 'solenoid' ? '' : 'none';
+  document.querySelector('#cR .ctrl-row').firstChild.textContent = loops ? 'Spulenradius R ' : 'Abstand / Referenzlänge R ';
+  document.getElementById('vI').textContent = S.I.toFixed(1) + ' A';
+  document.querySelector('#cN .ctrl-row').firstChild.textContent = S.config === 'solenoid' ? 'Windungen N (gesamt) ' : (S.config === 'loop' ? 'Windungen N ' : 'Windungen N (pro Spule) ');
+  document.getElementById('vN').textContent = S.N;
+  document.getElementById('vR').textContent = (S.R * 100).toFixed(1) + ' cm';
+  document.getElementById('vD').textContent = S.D.toFixed(2) + ' R' + (Math.abs(S.D - 1) < 1e-9 ? ' (Helmholtz)' : '');
+  document.getElementById('vL').textContent = S.L.toFixed(1) + ' R = ' + (S.L * S.R * 100).toFixed(1) + ' cm';
+}
+let pending = false;
+function schedule() { if (pending) return; pending = true; requestAnimationFrame(() => { pending = false; syncUI(); render(); }); }
+document.getElementById('config').addEventListener('change', e => { S.config = e.target.value; schedule(); });
+[['I', 'I', 1], ['N', 'N', 1], ['R', 'R', 0.01], ['D', 'D', 1], ['L', 'L', 1]].forEach(([id, k, f]) =>
+  document.getElementById(id).addEventListener('input', e => { S[k] = +e.target.value * f; schedule(); }));
+[['tHeat', 'heat'], ['tLines', 'lines'], ['tVec', 'vec']].forEach(([id, k]) =>
+  document.getElementById(id).addEventListener('click', e => { S[k] = !S[k]; e.target.classList.toggle('on', S[k]); schedule(); }));
+
+canvas.addEventListener('mousemove', e => {
+  const r = canvas.getBoundingClientRect();
+  const [X, Y] = toW((e.clientX - r.left) * DPR, (e.clientY - r.top) * DPR);
+  const [bx, by] = field(X, Y);
+  const lbl = sources.loops.length ? ['z', 'ρ', 'B_z', 'B_ρ'] : ['x', 'y', 'B_x', 'B_y'];
+  document.getElementById('probe').innerHTML =
+    `${lbl[0]} = ${(X * 100).toFixed(2)} cm, ${lbl[1]} = ${(Y * 100).toFixed(2)} cm<br>|B| = ${fmtB(Math.hypot(bx, by))}<br>${lbl[2]} = ${fmtB(Math.abs(bx)).replace(/^/, bx < 0 ? '−' : '')} · ${lbl[3]} = ${fmtB(Math.abs(by)).replace(/^/, by < 0 ? '−' : '')}`;
+});
+window.addEventListener('resize', () => { resize(); schedule(); });
+resize(); syncUI(); render();
+</script>
+</body>
+</html>
